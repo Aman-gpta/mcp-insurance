@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "insurance": {
+      "command": "node",
+      "args": [
+        "d:/mcp insurance/mcp-server.ts"
+      ],
+      "env": {
+        "INSURANCE_API_URL": "http://localhost:3000"
+      }
+    }
+  }
+}
