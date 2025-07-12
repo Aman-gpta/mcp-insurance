@@ -5,6 +5,7 @@
   "scripts": {
     "start": "cd backend && npm start",
     "dev": "cd backend && npm run dev",
+    "dev:all": "concurrently \"npm run dev\" \"npm run mcp-server\"",
     "build": "cd backend && npm run build",
     "install-all": "npm install && cd backend && npm install",
     "mcp-server": "tsx mcp-server.ts"
@@ -14,7 +15,8 @@
     "axios": "^1.10.0",
     "dotenv": "^17.2.0",
     "zod": "^3.25.76",
-    "tsx": "^4.20.3"
+    "tsx": "^4.20.3",
+    "concurrently": "^9.1.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.13",

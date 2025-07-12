@@ -9,7 +9,8 @@ A Node.js/Express server that acts as a Model Context Protocol (MCP) server for 
 - **OpenKoda API Integration**: Seamless connection to OpenKoda platform
 - **Type Safety**: Full TypeScript support with Zod schema validation
 - **Error Handling**: Comprehensive error handling and validation
-- **Mock Mode**: Testing mode when OpenKoda server is not available
+- **Mock Mode**: Complete testing mode when OpenKoda server is not available
+- **MCP Protocol**: Full Model Context Protocol server implementation
 
 ## Quick Start
 
@@ -36,6 +37,11 @@ A Node.js/Express server that acts as a Model Context Protocol (MCP) server for 
    npm run dev
    ```
 
+5. **Start MCP server** (in a separate terminal)
+   ```bash
+   npm run mcp-server
+   ```
+
 ## API Endpoints
 
 ### Health Check
@@ -46,6 +52,14 @@ A Node.js/Express server that acts as a Model Context Protocol (MCP) server for 
 - `POST /policies/details` - Get policy details by ID
 - `POST /policies/create` - Create a new policy
 - `GET /policies/client/:clientId` - List all policies for a client
+
+## MCP Tools
+
+The MCP server provides the following tools:
+
+1. **create_insurance_policy** - Create a new insurance policy
+2. **get_policy_details** - Retrieve details of an existing policy
+3. **list_client_policies** - List all policies for a specific client
 
 ## Environment Variables
 
@@ -60,41 +74,63 @@ PORT=3000
 
 ## Testing
 
-Test policy creation:
+### Test Backend API
 ```bash
-node -e "
-const http = require('http');
-const data = JSON.stringify({
-  clientId: 'CLIENT123',
-  policyType: 'AUTO',
-  startDate: '2025-07-12T00:00:00Z',
-  endDate: '2026-07-12T00:00:00Z',
-  premiumAmount: 1200.50
-});
+# Create a policy
+curl -X POST http://localhost:3000/policies/create \
+  -H "Content-Type: application/json" \
+  -d '{
+    "clientId": "CLIENT123",
+    "policyType": "AUTO",
+    "startDate": "2025-07-12T00:00:00Z",
+    "endDate": "2026-07-12T00:00:00Z",
+    "premiumAmount": 1200.50
+  }'
 
-const options = {
-  hostname: 'localhost',
-  port: 3000,
-  path: '/policies/create',
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'Content-Length': data.length
-  }
-};
+# Get policy details
+curl -X POST http://localhost:3000/policies/details \
+  -H "Content-Type: application/json" \
+  -d '{"policyId": "POL-1752332808164"}'
 
-const req = http.request(options, (res) => {
-  let body = '';
-  res.on('data', (chunk) => body += chunk);
-  res.on('end', () => {
-    console.log('Status:', res.statusCode);
-    console.log('Response:', body);
-  });
-});
+# List client policies
+curl http://localhost:3000/policies/client/CLIENT123
 
-req.write(data);
-req.end();
-"
+# Health check
+curl http://localhost:3000/health
+```
+
+### Test MCP Server
+```bash
+# Run the MCP server test
+node test-mcp.js
+```
+
+## Mock Mode
+
+When `MOCK_MODE=true` is set in the environment, the server operates in mock mode:
+
+- **Policy Creation**: Creates mock policies with generated IDs
+- **Policy Retrieval**: Returns mock policies from in-memory storage
+- **Client Policy Listing**: Returns all mock policies for the specified client
+- **No External Dependencies**: Works without OpenKoda API connection
+
+This is perfect for development and testing without requiring the actual OpenKoda server.
+
+## Project Structure
+
+```
+mcp-insurance/
+├── backend/                 # Express.js API server
+│   ├── src/
+│   │   ├── index.ts        # Main server file
+│   │   ├── tools.ts        # Business logic functions
+│   │   ├── schemas.ts      # Zod validation schemas
+│   │   └── openkoda.ts     # OpenKoda API client
+│   ├── package.json
+│   └── .env               # Environment configuration
+├── mcp-server.ts          # MCP protocol server
+├── test-mcp.js           # MCP server test script
+└── package.json          # Root package configuration
 ```
 
 ## Technology Stack
@@ -103,6 +139,25 @@ req.end();
 - **Validation**: Zod for schema validation
 - **HTTP Client**: Axios for API requests
 - **Development**: tsx for hot reloading
+- **MCP**: Model Context Protocol SDK
+- **Testing**: Mock mode for offline development
+
+## Development
+
+### Running in Development Mode
+```bash
+# Terminal 1: Start backend server
+cd backend && npm run dev
+
+# Terminal 2: Start MCP server
+npm run mcp-server
+```
+
+### Building for Production
+```bash
+npm run build
+npm start
+```
 
 ## License
 
