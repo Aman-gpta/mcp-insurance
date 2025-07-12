@@ -10,7 +10,7 @@ import { z } from 'zod';
 import axios from 'axios';
 
 // Import our existing schemas and functions
-import { getPolicyDetailsSchema, createPolicySchema, listClientPoliciesSchema } from './schemas.js';
+import { getPolicyDetailsSchema, createPolicySchema, listClientPoliciesSchema } from './backend/src/schemas.js';
 
 class InsuranceMCPServer {
   private server: Server;

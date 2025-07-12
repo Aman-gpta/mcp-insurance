@@ -8,6 +8,9 @@ import {
 } from './schemas';
 import { z } from 'zod';
 
+// Mock data storage for testing
+const mockPolicies = new Map<string, any>();
+
 /**
  * Fetches the details of a specific insurance policy.
  * @param input - An object containing the policyId.
@@ -18,6 +21,16 @@ export async function getPolicyDetails(
 ) {
   try {
     const { policyId } = getPolicyDetailsSchema.parse(input);
+    
+    // Mock mode for testing
+    if (process.env.MOCK_MODE === 'true') {
+      const policy = mockPolicies.get(policyId);
+      if (!policy) {
+        return { error: 'Policy not found', details: `Policy with ID ${policyId} does not exist` };
+      }
+      return { success: true, policy };
+    }
+    
     const response = await openkodaApi.get(`/policies/${policyId}`);
     return response.data;
   } catch (error: any) {
@@ -41,14 +54,20 @@ export async function createPolicy(
     
     // Mock mode for testing (when OpenKoda server is not available)
     if (process.env.MOCK_MODE === 'true') {
+      const policyId = `POL-${Date.now()}`;
+      const policy = {
+        policyId,
+        ...policyData,
+        status: 'active',
+        createdAt: new Date().toISOString()
+      };
+      
+      // Store in mock data
+      mockPolicies.set(policyId, policy);
+      
       return {
         success: true,
-        policy: {
-          policyId: `POL-${Date.now()}`,
-          ...policyData,
-          status: 'active',
-          createdAt: new Date().toISOString()
-        }
+        policy
       };
     }
     
@@ -72,6 +91,19 @@ export async function listClientPolicies(
 ) {
   try {
     const { clientId } = listClientPoliciesSchema.parse(input);
+    
+    // Mock mode for testing
+    if (process.env.MOCK_MODE === 'true') {
+      const clientPolicies = Array.from(mockPolicies.values())
+        .filter(policy => policy.clientId === clientId);
+      
+      return {
+        success: true,
+        policies: clientPolicies,
+        count: clientPolicies.length
+      };
+    }
+    
     const response = await openkodaApi.get('/policies', {
       params: { clientId },
     });
