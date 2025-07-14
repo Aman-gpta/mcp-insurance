@@ -9,15 +9,146 @@ import {
 import { z } from 'zod';
 import axios from 'axios';
 
+// Gemini specific imports
+import {
+  GoogleGenerativeAI,
+  FunctionDeclarationSchemaType,
+  FunctionDeclaration,
+} from '@google/generative-ai';
+import bodyParser from 'body-parser';
+import express from 'express';
+import cors from 'cors';
+
 // Import our existing schemas and functions
-import { getPolicyDetailsSchema, createPolicySchema, listClientPoliciesSchema } from './schemas.js';
+import { getPolicyDetailsSchema, createPolicySchema, listClientPoliciesSchema } from './backend/src/schemas.js';
+import { getPolicyDetails, createPolicy, listClientPolicies } from './backend/src/tools.js';
+
+const app = express();
+app.use(cors());
+app.use(bodyParser.json());
+
+const PORT = process.env.PORT || 8082;
+
+// Gemini API setup
+const geminiApiKey = process.env.GEMINI_API_KEY;
+if (!geminiApiKey) {
+  // Don't throw error, just log it, as this server might be used for Claude only
+  console.log(
+    'GEMINI_API_KEY is not defined. The Gemini chat endpoint will not work.'
+  );
+}
+
+const genAI = new GoogleGenerativeAI(geminiApiKey || '');
+const model = genAI.getGenerativeModel({
+  model: 'gemini-1.5-flash',
+  systemInstruction: "You are a helpful insurance assistant. When you have enough information to use a tool to answer a user's question, use it directly without asking for permission. Just provide the answer.",
+});
+
+// Define the tools for Gemini from existing functions
+const tools: FunctionDeclaration[] = [
+  {
+    name: 'createPolicy',
+    description: 'Create a new insurance policy for a client',
+    parameters: {
+      type: FunctionDeclarationSchemaType.OBJECT,
+      properties: {
+        clientId: { type: FunctionDeclarationSchemaType.STRING },
+        policyType: { type: FunctionDeclarationSchemaType.STRING },
+        startDate: { type: FunctionDeclarationSchemaType.STRING },
+        endDate: { type: FunctionDeclarationSchemaType.STRING },
+        premiumAmount: { type: FunctionDeclarationSchemaType.NUMBER },
+      },
+      required: ['clientId', 'policyType', 'startDate', 'endDate', 'premiumAmount'],
+    },
+  },
+  {
+    name: 'getPolicyDetails',
+    description: 'Retrieve details of an existing insurance policy',
+    parameters: {
+      type: FunctionDeclarationSchemaType.OBJECT,
+      properties: {
+        policyId: { type: FunctionDeclarationSchemaType.STRING },
+      },
+      required: ['policyId'],
+    },
+  },
+  {
+    name: 'listClientPolicies',
+    description: 'Lists all insurance policies for the currently authenticated user. The user\'s client ID is automatically determined by the system.',
+    parameters: {
+      type: FunctionDeclarationSchemaType.OBJECT,
+      properties: {},
+      required: [],
+    },
+  },
+];
+
+
+app.post('/api/chat', async (req, res) => {
+  if (!geminiApiKey) {
+    return res.status(500).json({ error: 'Gemini API key is not configured on the server.' });
+  }
+
+  try {
+    const { message, history } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    const chat = model.startChat({
+      history: history || [],
+      tools: [{ functionDeclarations: tools }],
+    });
+
+    const result = await chat.sendMessage(message);
+    const call = result.response.functionCalls()?.[0];
+
+    if (call) {
+      let apiResult;
+      const args = call.args as any;
+      // Call the tool
+      if (call.name === 'createPolicy') {
+        apiResult = await createPolicy(args);
+      } else if (call.name === 'getPolicyDetails') {
+        apiResult = await getPolicyDetails(args);
+      } else if (call.name === 'listClientPolicies') {
+        apiResult = await listClientPolicies();
+      } else {
+        apiResult = { error: 'Unknown tool called by the model' };
+      }
+
+      // Send the result back to the model
+      const result2 = await chat.sendMessage(
+        JSON.stringify([
+          {
+            functionResponse: {
+              name: call.name,
+              response: { result: apiResult },
+            },
+          },
+        ])
+      );
+      
+      // Send the model's response to the client
+      res.json({ response: result2.response.text() });
+    } else {
+      // If no tool is called, just send the text response
+      res.json({ response: result.response.text() });
+    }
+  } catch (error) {
+    console.error('Gemini chat error:', error);
+    res.status(500).json({ error: 'Failed to communicate with Gemini' });
+  }
+});
+
 
 class InsuranceMCPServer {
   private server: Server;
   private apiBaseUrl: string;
 
   constructor() {
-    this.apiBaseUrl = process.env.INSURANCE_API_URL || 'http://localhost:3000';
+    this.apiBaseUrl = process.env.INSURANCE_API_URL || 'http://localhost:3001';
     this.server = new Server(
       {
         name: 'insurance-server',
@@ -183,3 +314,8 @@ class InsuranceMCPServer {
 
 const server = new InsuranceMCPServer();
 server.run().catch(console.error);
+
+// Start the express server for Gemini requests
+app.listen(PORT, () => {
+  console.log(`HTTP server listening on port ${PORT}`);
+});

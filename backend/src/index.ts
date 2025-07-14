@@ -3,12 +3,6 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import {
-  getPolicyDetails,
-  createPolicy,
-  listClientPolicies,
-  checkApiHealth,
-} from './tools';
 
 // Create the Express app
 const app = express();
@@ -17,63 +11,73 @@ const app = express();
 app.use(cors()); // Enable CORS for all routes
 app.use(express.json()); // Parse JSON bodies
 
-const port = process.env.PORT || 3000;
+const port = 3001;
+
+// --- MOCK DATA ---
+const mockPolicies = {
+  'user-12345': [
+    { policyId: 'pol-001', clientId: 'user-12345', policyType: 'AUTO', premiumAmount: 150.75, status: 'ACTIVE', startDate: '2024-01-15', endDate: '2025-01-14' },
+    { policyId: 'pol-002', clientId: 'user-12345', policyType: 'HOME', premiumAmount: 320.50, status: 'ACTIVE', startDate: '2023-06-20', endDate: '2024-06-19' },
+  ],
+};
+
+let policyCounter = 3;
 
 /**
  * A healthy-check endpoint.
  */
 app.get('/', (req, res) => {
-  res.send('Openkoda Insurance MCP Server is running!');
+  res.send('Openkoda Insurance MCP Mock Server is running!');
 });
 
 /**
  * Endpoint to fetch policy details.
- * Expects a JSON body with a "policyId".
  */
 app.post('/policies/details', async (req, res) => {
-  try {
-    const result = await getPolicyDetails(req.body);
-    if (result.error) {
-      return res.status(400).json(result);
-    }
-    res.json(result);
-  } catch (error) {
-    console.error('Error in /policies/details:', error);
-    res.status(500).json({ error: 'Internal server error' });
+  const { policyId } = req.body;
+  const allPolicies = Object.values(mockPolicies).flat();
+  const policy = allPolicies.find(p => p.policyId === policyId);
+
+  if (policy) {
+    res.json(policy);
+  } else {
+    res.status(404).json({ error: 'Policy not found' });
   }
 });
 
 /**
  * Endpoint to create a new insurance policy.
- * Expects a JSON body with the policy data.
  */
 app.post('/policies/create', async (req, res) => {
-  try {
-    const result = await createPolicy(req.body);
-    if (result.error) {
-      return res.status(400).json(result);
-    }
-    res.status(201).json(result);
-  } catch (error) {
-    console.error('Error in /policies/create:', error);
-    res.status(500).json({ error: 'Internal server error' });
+  const { clientId, ...policyData } = req.body;
+  const newPolicyId = `pol-${String(policyCounter++).padStart(3, '0')}`;
+  const newPolicy = {
+    policyId: newPolicyId,
+    clientId,
+    ...policyData,
+    status: 'ACTIVE',
+  };
+
+  if (!mockPolicies[clientId]) {
+    mockPolicies[clientId] = [];
   }
+  mockPolicies[clientId].push(newPolicy);
+
+  res.status(201).json(newPolicy);
 });
 
 /**
  * Endpoint to list all policies for a client.
- * Expects the "clientId" as a URL parameter.
  */
 app.get('/policies/client/:clientId', async (req, res) => {
-  try {
-    const result = await listClientPolicies({ clientId: req.params.clientId });
-    if (result.error) {
-      return res.status(400).json(result);
-    }
-    res.json(result);
-  } catch (error) {
-    console.error('Error in /policies/client/:clientId:', error);
-    res.status(500).json({ error: 'Internal server error' });
+  const { clientId } = req.params;
+  const policies = mockPolicies[clientId];
+
+  if (policies) {
+    res.json(policies);
+  } else {
+    // Return empty array if client has no policies
+    res.json([]);
   }
 });
 
@@ -81,22 +85,12 @@ app.get('/policies/client/:clientId', async (req, res) => {
  * Health check endpoint with more detailed information
  */
 app.get('/health', async (req, res) => {
-  try {
-    const apiHealth = await checkApiHealth();
-    res.json({
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      version: '1.0.0',
-      environment: process.env.NODE_ENV || 'development',
-      api: apiHealth
-    });
-  } catch (error) {
-    res.status(503).json({
-      status: 'unhealthy',
-      timestamp: new Date().toISOString(),
-      error: 'Service unavailable'
-    });
-  }
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0-mock',
+    environment: process.env.NODE_ENV || 'development',
+  });
 });
 
 // Error handling middleware
