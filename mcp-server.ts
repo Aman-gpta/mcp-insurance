@@ -14,6 +14,8 @@ import {
   GoogleGenerativeAI,
   FunctionDeclarationSchemaType,
   FunctionDeclaration,
+  HarmCategory,
+  HarmBlockThreshold,
 } from '@google/generative-ai';
 import bodyParser from 'body-parser';
 import express from 'express';
@@ -40,8 +42,26 @@ if (!geminiApiKey) {
 
 const genAI = new GoogleGenerativeAI(geminiApiKey || '');
 const model = genAI.getGenerativeModel({
-  model: 'gemini-1.5-flash',
+  model: 'gemini-2.5-pro',
   systemInstruction: "You are a helpful insurance assistant. When you have enough information to use a tool to answer a user's question, use it directly without asking for permission. Just provide the answer.",
+  safetySettings: [
+    {
+      category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+      threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+    },
+    {
+      category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+      threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+    },
+    {
+      category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+      threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+    },
+    {
+      category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+      threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+    },
+  ],
 });
 
 // Define the tools for Gemini from existing functions
@@ -124,7 +144,7 @@ app.post('/api/chat', async (req, res) => {
           {
             functionResponse: {
               name: call.name,
-              response: { result: apiResult },
+              response: apiResult ,
             },
           },
         ])
